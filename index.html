@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Relay Controller</title>
+<style>
+:root {
+  --bg:#0d0f11; --bg2:#141618; --bg3:#1c1f22; --bg4:#22262a;
+  --border:rgba(255,255,255,0.07); --border2:rgba(255,255,255,0.13); --border3:rgba(255,255,255,0.2);
+  --text:#eef0f2; --text2:#7a8490; --text3:#3e4449;
+  --accent:#3b9eff; --on:#22c55e; --warn:#f59e0b; --danger:#ef4444;
+  --r:10px; --rl:16px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh;}
+
+/* NAV */
+nav{display:flex;align-items:center;justify-content:space-between;padding:0 1.25rem;height:52px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg);z-index:200;}
+.logo{font-size:14px;font-weight:600;color:var(--accent);letter-spacing:.04em;}
+.ntabs{display:flex;gap:3px;}
+.ntab{padding:5px 13px;border-radius:6px;font-size:13px;cursor:pointer;border:1px solid transparent;color:var(--text2);background:none;transition:all .15s;}
+.ntab.active{background:var(--bg3);border-color:var(--border2);color:var(--text);}
+.cstatus{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3);}
+.cdot{width:7px;height:7px;border-radius:50%;background:var(--text3);}
+.cdot.ok{background:var(--on);box-shadow:0 0 5px var(--on);}
+
+.page{display:none;padding:1.25rem;max-width:960px;margin:0 auto;}
+.page.active{display:block;}
+
+/* CLOUD CONFIG */
+.cfg{background:var(--bg2);border:1px solid var(--border);border-radius:var(--rl);padding:1.1rem 1.25rem;margin-bottom:1rem;}
+.cfg h3{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--text2);margin-bottom:.9rem;font-weight:500;}
+.frow{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.flabel{font-size:12px;color:var(--text2);width:110px;flex-shrink:0;}
+.fi{flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:12px;padding:7px 10px;outline:none;font-family:monospace;}
+.fi:focus{border-color:var(--accent);}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:.75rem;}
+.btn{padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .15s;}
+.btn-p{background:var(--accent);color:#fff;} .btn-p:hover{filter:brightness(1.1);}
+.btn-s{background:var(--bg3);border:1px solid var(--border2);color:var(--text);} .btn-s:hover{border-color:var(--accent);color:var(--accent);}
+.btn-sm{padding:5px 11px;font-size:12px;}
+.btn-ghost{background:none;border:none;color:var(--text2);cursor:pointer;font-size:13px;padding:4px 8px;border-radius:6px;transition:all .15s;}
+.btn-ghost:hover{background:var(--bg3);color:var(--text);}
+
+/* STATUS STRIP */
+.sstrip{background:var(--bg2);border:1px solid var(--border);border-radius:var(--rl);padding:.85rem 1.1rem;margin-bottom:1rem;display:flex;align-items:center;gap:1.25rem;flex-wrap:wrap;}
+.si{font-size:12px;color:var(--text2);} .si b{color:var(--text);font-weight:500;}
+.sbadge{font-size:11px;padding:3px 9px;border-radius:4px;background:rgba(59,158,255,.08);color:var(--accent);border:1px solid rgba(59,158,255,.2);display:none;}
+
+/* LAYOUT 2 COLONNE */
+.main-layout{display:grid;grid-template-columns:220px 1fr;gap:12px;align-items:start;}
+@media(max-width:640px){.main-layout{grid-template-columns:1fr;}}
+
+/* OUTPUT LIST (colonna sinistra) */
+.out-list{display:flex;flex-direction:column;gap:6px;}
+.out-item{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:.65rem .85rem;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:8px;}
+.out-item:hover{border-color:var(--border2);}
+.out-item.selected{border-color:var(--accent);background:rgba(59,158,255,.06);}
+.out-item.is-on .out-dot{background:var(--on);box-shadow:0 0 5px var(--on);}
+.out-dot{width:8px;height:8px;border-radius:50%;background:var(--bg4);border:1px solid var(--border2);flex-shrink:0;transition:all .2s;}
+.out-item-info{flex:1;min-width:0;}
+.out-item-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.out-item-sub{font-size:10px;color:var(--text3);margin-top:1px;}
+.sw{position:relative;width:38px;height:21px;flex-shrink:0;}
+.sw input{opacity:0;width:0;height:0;}
+.sw-s{position:absolute;inset:0;border-radius:21px;background:var(--bg4);border:1px solid var(--border2);cursor:pointer;transition:.2s;}
+.sw-s:before{content:'';position:absolute;width:13px;height:13px;left:3px;top:3px;border-radius:50%;background:var(--text3);transition:.2s;}
+.sw input:checked+.sw-s{background:var(--on);border-color:var(--on);}
+.sw input:checked+.sw-s:before{transform:translateX(17px);background:#fff;}
+
+/* EDITOR (colonna destra) */
+.editor{background:var(--bg2);border:1px solid var(--border);border-radius:var(--rl);overflow:hidden;}
+.ed-header{padding:.85rem 1rem;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;}
+.ed-nameinput{background:transparent;border:none;border-bottom:1px solid var(--border2);color:var(--text);font-size:15px;font-weight:600;padding:2px 0;outline:none;flex:1;}
+.ed-nameinput:focus{border-bottom-color:var(--accent);}
+.ed-pin{font-size:11px;color:var(--text3);flex-shrink:0;}
+
+/* CALENDARIO */
+.cal-section{padding:.85rem 1rem;border-bottom:1px solid var(--border);}
+.cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:.65rem;}
+.cal-title{font-size:13px;font-weight:600;}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;}
+.cal-day-label{font-size:9px;color:var(--text3);text-align:center;padding-bottom:3px;}
+.cal-day{height:32px;border-radius:6px;border:1px solid transparent;background:none;color:var(--text2);font-size:12px;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;position:relative;}
+.cal-day.today{border-color:var(--border2);color:var(--text);}
+.cal-day.in-range{background:var(--bg3);color:var(--text);}
+.cal-day.selected{background:var(--accent);color:#fff;border-color:var(--accent);}
+.cal-day.has-slots::after{content:'';position:absolute;bottom:3px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:var(--on);}
+.cal-day.selected.has-slots::after{background:#fff;}
+.cal-day.past{opacity:.25;pointer-events:none;}
+.cal-day.empty{pointer-events:none;}
+
+/* SLOT EDITOR */
+.slot-section{padding:.85rem 1rem;}
+.slot-date-header{font-size:12px;color:var(--text2);margin-bottom:.65rem;display:flex;align-items:center;justify-content:space-between;}
+.slot-date-label{font-weight:600;color:var(--text);}
+.slot-list{display:flex;flex-direction:column;gap:5px;}
+.slot-row{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:.55rem .75rem;display:flex;align-items:center;gap:8px;}
+.slot-row.disabled{opacity:.45;}
+.slot-num{font-size:10px;color:var(--text3);width:16px;flex-shrink:0;}
+.slot-times{display:flex;align-items:center;gap:5px;flex:1;}
+.slot-times label{font-size:10px;color:var(--text3);width:20px;}
+.ti{background:var(--bg4);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-size:12px;padding:4px 6px;outline:none;width:72px;}
+.ti:focus{border-color:var(--accent);}
+.ti:disabled{opacity:.4;}
+.slot-del{background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;padding:2px 5px;transition:color .15s;margin-left:auto;}
+.slot-del:hover{color:var(--danger);}
+.add-slot-btn{width:100%;margin-top:5px;background:none;border:1px dashed var(--border2);border-radius:8px;padding:7px;font-size:12px;color:var(--text2);cursor:pointer;transition:all .15s;}
+.add-slot-btn:hover{border-color:var(--accent);color:var(--accent);}
+.no-date-msg{text-align:center;padding:2rem 1rem;color:var(--text3);font-size:13px;}
+
+/* CLIENT PAGE */
+.cl-header{text-align:center;padding:1.5rem 0 1rem;}
+.cl-title{font-size:20px;font-weight:300;letter-spacing:.08em;margin-bottom:4px;}
+.cl-sub{font-size:12px;color:var(--text3);}
+.cl-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;}
+@media(min-width:540px){.cl-grid{grid-template-columns:repeat(3,1fr);}}
+.cl-tile{background:var(--bg2);border:1px solid var(--border);border-radius:var(--rl);padding:1.1rem .85rem;text-align:center;cursor:pointer;transition:all .18s;}
+.cl-tile:active{transform:scale(.97);}
+.cl-tile.is-on{border-color:rgba(34,197,94,.45);background:rgba(34,197,94,.04);}
+.cl-icon{width:42px;height:42px;border-radius:50%;background:var(--bg3);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;margin:0 auto .65rem;font-size:19px;transition:all .2s;}
+.cl-tile.is-on .cl-icon{background:rgba(34,197,94,.1);border-color:rgba(34,197,94,.4);}
+.cl-name{font-size:13px;font-weight:600;margin-bottom:.25rem;}
+.cl-state{font-size:11px;color:var(--text3);}
+.cl-tile.is-on .cl-state{color:var(--on);}
+.cl-sched{font-size:10px;color:var(--text3);margin-top:.35rem;line-height:1.5;}
+
+/* TOAST */
+.toast{position:fixed;bottom:1.1rem;right:1.1rem;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r);padding:9px 14px;font-size:13px;color:var(--text);transform:translateY(55px);opacity:0;transition:all .2s;z-index:999;max-width:270px;}
+.toast.show{transform:translateY(0);opacity:1;}
+.toast.ok{border-color:var(--on);color:#4ade80;}
+.toast.err{border-color:var(--danger);color:#f87171;}
+.toast.warn{border-color:var(--warn);color:var(--warn);}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">◈ Relay Control</div>
+  <div class="ntabs">
+    <button class="ntab active" onclick="showPage('admin',this)">Admin</button>
+    <button class="ntab" onclick="showPage('client',this)">Utente</button>
+  </div>
+  <div class="cstatus"><div class="cdot" id="cdot"></div><span id="cst">offline</span></div>
+</nav>
+
+<!-- ═══════════════════════ ADMIN ═══════════════════════ -->
+<div class="page active" id="page-admin">
+
+  <div class="cfg">
+    <h3>Arduino Cloud</h3>
+    <div class="frow"><div class="flabel">Thing ID</div><input class="fi" id="thingId" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></div>
+    <div class="frow"><div class="flabel">Client ID</div><input class="fi" id="clientId" placeholder="Client ID"></div>
+    <div class="frow"><div class="flabel">Client Secret</div><input class="fi" id="clientSecret" type="password" placeholder="Secret"></div>
+    <div class="actions">
+      <button class="btn btn-p" onclick="connectCloud()">Connetti</button>
+      <button class="btn btn-s" onclick="saveConfig()">Salva config</button>
+      <button class="btn btn-s" onclick="syncRTC()">⏱ Sync orologio</button>
+      <span class="sbadge" id="sbadge">✓ RTC sincronizzato</span>
+    </div>
+  </div>
+
+  <div class="sstrip">
+    <div class="si">Ora Arduino: <b id="stTime">—</b></div>
+    <div class="si">Data: <b id="stDate">—</b></div>
+    <div class="si">RTC: <b id="stRtc">—</b></div>
+    <div class="si">Uscite: <b id="stOuts">——————</b></div>
+    <button class="btn btn-s btn-sm" onclick="refreshStatus()">↻ Stato</button>
+  </div>
+
+  <div class="main-layout">
+    <!-- Lista uscite -->
+    <div>
+      <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.5rem;">Uscite</div>
+      <div class="out-list" id="outList"></div>
+      <div class="actions" style="margin-top:.75rem;flex-direction:column;">
+        <button class="btn btn-p" onclick="sendAll()">📤 Invia ad Arduino</button>
+        <button class="btn btn-s" onclick="saveLocal()">💾 Salva locale</button>
+      </div>
+    </div>
+    <!-- Editor -->
+    <div class="editor" id="editor">
+      <div class="no-date-msg">Seleziona un'uscita per programmare gli orari</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ CLIENT ═══════════════════════ -->
+<div class="page" id="page-client">
+  <div class="cl-header">
+    <div class="cl-title">Controllo Uscite</div>
+    <div class="cl-sub" id="clTime">—</div>
+  </div>
+  <div class="cl-grid" id="clGrid"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const NUM_OUT  = 6;
+const MAX_SLOT = 8;
+const DAYS_IT  = ['Do','Lu','Ma','Me','Gi','Ve','Sa'];
+const MONTHS_IT = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+const ICONS    = ['💡','🌱','💧','🔆','🔌','⚙️'];
+
+let outputs = [];
+let cfg = {thingId:'',clientId:'',clientSecret:'',token:''};
+let connected = false;
+let selectedOut = 0;
+let selectedDate = null;  // "YYYY-MM-DD"
+let calOffset = 0;        // settimane di offset per la navigazione calendario
+
+const today = new Date();
+today.setHours(0,0,0,0);
+
+// ─── DATE UTILS ──────────────────────────────────────────────────────────────
+function dateKey(d){ return d.toISOString().slice(0,10); }
+function todayKey(){ return dateKey(today); }
+function addDays(d,n){ const r=new Date(d); r.setDate(r.getDate()+n); return r; }
+function parseDate(k){ const [y,m,d]=k.split('-').map(Number); return new Date(y,m-1,d); }
+function formatDateIT(k){
+  const d=parseDate(k);
+  return `${d.getDate()} ${MONTHS_IT[d.getMonth()]}`;
+}
+
+// ─── INIT ────────────────────────────────────────────────────────────────────
+function makeOutput(i){
+  return { name:`Uscita ${i+1}`, state:false, schedule:{} };
+  // schedule = { "2025-06-11": [{on:"08:00",off:"12:00"}, ...], ... }
+}
+function initOutputs(){
+  const s=localStorage.getItem('rc2_outputs');
+  outputs = s ? JSON.parse(s) : Array.from({length:NUM_OUT},(_,i)=>makeOutput(i));
+}
+function saveLocal(){ localStorage.setItem('rc2_outputs',JSON.stringify(outputs)); showToast('Salvato','ok'); }
+function loadConfig(){
+  const c=localStorage.getItem('rc2_cloud_cfg');
+  if(c) cfg={...cfg,...JSON.parse(c)};
+  document.getElementById('thingId').value  = cfg.thingId  ||'';
+  document.getElementById('clientId').value = cfg.clientId ||'';
+}
+function saveConfig(){
+  cfg.thingId      = document.getElementById('thingId').value.trim();
+  cfg.clientId     = document.getElementById('clientId').value.trim();
+  cfg.clientSecret = document.getElementById('clientSecret').value.trim();
+  localStorage.setItem('rc2_cloud_cfg',JSON.stringify({thingId:cfg.thingId,clientId:cfg.clientId}));
+  showToast('Configurazione salvata','ok');
+}
+
+// ─── CLOUD ───────────────────────────────────────────────────────────────────
+async function connectCloud(){
+  cfg.thingId      = document.getElementById('thingId').value.trim();
+  cfg.clientId     = document.getElementById('clientId').value.trim();
+  cfg.clientSecret = document.getElementById('clientSecret').value.trim();
+  if(!cfg.clientId||!cfg.clientSecret){showToast('Inserisci le credenziali','err');return;}
+  showToast('Connessione…');
+  try{
+    const r=await fetch('https://arduino-proxy.mitech-tn.workers.dev/iot/v1/clients/token',{
+      method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:`grant_type=client_credentials&client_id=${encodeURIComponent(cfg.clientId)}&client_secret=${encodeURIComponent(cfg.clientSecret)}&audience=https://arduino-proxy.mitech-tn.workers.dev/iot`
+    });
+    if(!r.ok) throw new Error('Auth fallita ('+r.status+')');
+    cfg.token=(await r.json()).access_token;
+    connected=true;
+    document.getElementById('cdot').classList.add('ok');
+    document.getElementById('cst').textContent='connesso';
+    showToast('Cloud connesso!','ok');
+    refreshStatus();
+  }catch(e){showToast('Errore: '+e.message,'err');}
+}
+async function cloudPut(name,value){
+  if(!connected||!cfg.thingId) return;
+  try{
+    await fetch(`https://arduino-proxy.mitech-tn.workers.dev/iot/v2/things/${cfg.thingId}/properties/byName/${name}/publish`,{
+      method:'PUT',
+      headers:{'Authorization':'Bearer '+cfg.token,'Content-Type':'application/json'},
+      body:JSON.stringify({value})
+    });
+  }catch(e){console.warn('PUT',name,e);}
+}
+async function cloudGet(name){
+  if(!connected||!cfg.thingId) return null;
+  try{
+    const r=await fetch(`https://arduino-proxy.mitech-tn.workers.dev/iot/v2/things/${cfg.thingId}/properties/byName/${name}`,{
+      headers:{'Authorization':'Bearer '+cfg.token}
+    });
+    return (await r.json()).last_value;
+  }catch(e){return null;}
+}
+async function refreshStatus(){
+  const v=await cloudGet('status_report');
+  if(!v){showToast('Nessuna risposta','warn');return;}
+  try{
+    const s=JSON.parse(v);
+    document.getElementById('stTime').textContent = s.time||'—';
+    document.getElementById('stDate').textContent = s.date||'—';
+    document.getElementById('stRtc').textContent  = s.rtc_synced?'✓ sì':'✗ no';
+    document.getElementById('stOuts').textContent = (s.outputs||[]).map(x=>x?'●':'○').join(' ');
+  }catch(e){}
+}
+async function syncRTC(){
+  const now=new Date();
+  const p=v=>String(v).padStart(2,'0');
+  const s=`${now.getFullYear()}-${p(now.getMonth()+1)}-${p(now.getDate())}T${p(now.getHours())}:${p(now.getMinutes())}:${p(now.getSeconds())}`;
+  await cloudPut('sync_time',s);
+  const b=document.getElementById('sbadge'); b.style.display='inline';
+  showToast('RTC sincronizzato','ok');
+  setTimeout(()=>b.style.display='none',4000);
+}
+async function sendAll(){
+  if(!connected){showToast('Prima connettiti','err');return;}
+  const names=['out1','out2','out3','out4','out5','out6'];
+  for(let i=0;i<NUM_OUT;i++) await cloudPut(names[i],outputs[i].state);
+  // Invia solo i prossimi 15 giorni di schedule
+  const sched = outputs.map(o=>{
+    const filtered={};
+    for(let i=0;i<=15;i++){
+      const k=dateKey(addDays(today,i));
+      if(o.schedule[k] && o.schedule[k].length) filtered[k]=o.schedule[k];
+    }
+    return filtered;
+  });
+  await cloudPut('schedule_data', JSON.stringify(sched));
+  // Pulizia vecchie date
+  purgePastDates();
+  saveLocal();
+  showToast('Inviato ad Arduino!','ok');
+}
+
+// ─── RENDER LISTA USCITE ─────────────────────────────────────────────────────
+function countActiveSlots(o){
+  let n=0;
+  for(let i=0;i<=15;i++){
+    const k=dateKey(addDays(today,i));
+    if(o.schedule[k]) n+=o.schedule[k].length;
+  }
+  return n;
+}
+function renderOutList(){
+  const el=document.getElementById('outList');
+  el.innerHTML=outputs.map((o,i)=>{
+    const n=countActiveSlots(o);
+    return `<div class="out-item ${i===selectedOut?'selected':''} ${o.state?'is-on':''}" onclick="selectOut(${i})">
+      <div class="out-dot"></div>
+      <div class="out-item-info">
+        <div class="out-item-name">${o.name}</div>
+        <div class="out-item-sub">${n?n+' slot nei prossimi 15gg':'Nessun orario'}</div>
+      </div>
+      <label class="sw" onclick="event.stopPropagation()">
+        <input type="checkbox" ${o.state?'checked':''} onchange="toggleOut(${i},this.checked)">
+        <span class="sw-s"></span>
+      </label>
+    </div>`;
+  }).join('');
+}
+function selectOut(i){
+  selectedOut=i;
+  renderOutList();
+  renderEditor();
+}
+function toggleOut(i,val){
+  outputs[i].state=val;
+  renderOutList();
+  renderClient();
+  if(connected){const n=['out1','out2','out3','out4','out5','out6'];cloudPut(n[i],val);}
+}
+
+// ─── CALENDARIO ──────────────────────────────────────────────────────────────
+function renderCalendar(){
+  const o = outputs[selectedOut];
+  // Finestra: oggi + 15 giorni
+  const windowStart = today;
+  const windowEnd   = addDays(today, 15);
+
+  // Inizio settimana corrente (con offset)
+  const startOfView = addDays(today, calOffset * 7);
+  // Allineamento a lunedì
+  const dow = (startOfView.getDay()+6)%7; // 0=lun
+  const calStart = addDays(startOfView, -dow);
+
+  // Titolo mese
+  const midDate = addDays(calStart, 10);
+  const monthLabel = MONTHS_IT[midDate.getMonth()] + ' ' + midDate.getFullYear();
+
+  const canPrev = calOffset > 0;
+  const canNext = calOffset < 2; // max 3 settimane avanti (copre i 15gg)
+
+  let html = `
+  <div class="cal-section">
+    <div class="cal-nav">
+      <button class="btn-ghost" onclick="calNav(-1)" ${!canPrev?'disabled style="opacity:.3;pointer-events:none"':''}>‹</button>
+      <span class="cal-title">${monthLabel}</span>
+      <button class="btn-ghost" onclick="calNav(1)" ${!canNext?'disabled style="opacity:.3;pointer-events:none"':''}>›</button>
+    </div>
+    <div class="cal-grid">
+      ${['Lu','Ma','Me','Gi','Ve','Sa','Do'].map(d=>`<div class="cal-day-label">${d}</div>`).join('')}`;
+
+  for(let i=0;i<28;i++){
+    const d = addDays(calStart, i);
+    const k = dateKey(d);
+    const isPast    = d < today;
+    const isToday   = k === dateKey(today);
+    const inRange   = d >= windowStart && d <= windowEnd;
+    const isSelected = k === selectedDate;
+    const hasSlots  = o.schedule[k] && o.schedule[k].length > 0;
+    const isEmpty   = !inRange;
+
+    let cls = 'cal-day';
+    if(isEmpty || isPast) cls += ' past';
+    else if(isToday) cls += ' today';
+    else if(inRange) cls += ' in-range';
+    if(isSelected) cls += ' selected';
+    if(hasSlots) cls += ' has-slots';
+
+    html += `<button class="${cls}" onclick="selectDate('${k}')">${d.getDate()}</button>`;
+  }
+
+  html += `</div></div>`;
+  return html;
+}
+
+function calNav(dir){
+  calOffset = Math.max(0, Math.min(2, calOffset+dir));
+  renderEditor();
+}
+
+function selectDate(k){
+  selectedDate = k;
+  renderEditor();
+}
+
+// ─── SLOT EDITOR ─────────────────────────────────────────────────────────────
+function renderSlots(){
+  if(!selectedDate) return `<div class="no-date-msg" style="padding:1.5rem">Seleziona una data nel calendario</div>`;
+
+  const o = outputs[selectedOut];
+  if(!o.schedule[selectedDate]) o.schedule[selectedDate]=[];
+  const slots = o.schedule[selectedDate];
+
+  let html = `<div class="slot-section">
+    <div class="slot-date-header">
+      <span class="slot-date-label">📅 ${formatDateIT(selectedDate)}</span>
+      <span style="font-size:11px;color:var(--text3)">${slots.length}/${MAX_SLOT} slot</span>
+    </div>
+    <div class="slot-list">`;
+
+  slots.forEach((s,si)=>{
+    html+=`<div class="slot-row" id="sr_${si}">
+      <span class="slot-num">${si+1}</span>
+      <div class="slot-times">
+        <label>ON</label>
+        <input type="time" class="ti" value="${s.on}" onchange="setSlotTime(${si},'on',this.value)">
+        <label style="width:22px">OFF</label>
+        <input type="time" class="ti" value="${s.off}" onchange="setSlotTime(${si},'off',this.value)">
+      </div>
+      <button class="slot-del" onclick="delSlot(${si})" title="Elimina">✕</button>
+    </div>`;
+  });
+
+  if(slots.length < MAX_SLOT){
+    html+=`<button class="add-slot-btn" onclick="addSlot()">+ Aggiungi orario</button>`;
+  } else {
+    html+=`<div style="text-align:center;font-size:11px;color:var(--text3);padding:.5rem">Massimo ${MAX_SLOT} orari per data</div>`;
+  }
+
+  html+=`</div></div>`;
+  return html;
+}
+
+function addSlot(){
+  if(!selectedDate) return;
+  const o=outputs[selectedOut];
+  if(!o.schedule[selectedDate]) o.schedule[selectedDate]=[];
+  if(o.schedule[selectedDate].length>=MAX_SLOT) return;
+  o.schedule[selectedDate].push({on:'08:00',off:'22:00'});
+  renderEditor();
+}
+function delSlot(si){
+  outputs[selectedOut].schedule[selectedDate].splice(si,1);
+  if(!outputs[selectedOut].schedule[selectedDate].length)
+    delete outputs[selectedOut].schedule[selectedDate];
+  renderEditor();
+  renderOutList();
+}
+function setSlotTime(si,field,val){
+  outputs[selectedOut].schedule[selectedDate][si][field]=val;
+}
+
+// ─── RENDER EDITOR COMPLETO ──────────────────────────────────────────────────
+function renderEditor(){
+  const o=outputs[selectedOut];
+  const ed=document.getElementById('editor');
+  ed.innerHTML=`
+    <div class="ed-header">
+      <input class="ed-nameinput" value="${o.name}" oninput="outputs[${selectedOut}].name=this.value;renderOutList();renderClient();">
+      <span class="ed-pin">pin ${selectedOut+2}</span>
+    </div>
+    ${renderCalendar()}
+    ${renderSlots()}`;
+}
+
+// ─── PULIZIA DATE PASSATE ────────────────────────────────────────────────────
+function purgePastDates(){
+  outputs.forEach(o=>{
+    Object.keys(o.schedule).forEach(k=>{
+      if(parseDate(k)<today) delete o.schedule[k];
+    });
+  });
+}
+
+// ─── CLIENT ──────────────────────────────────────────────────────────────────
+function todaySlotsSummary(o){
+  const tk=todayKey();
+  const slots=o.schedule[tk];
+  if(!slots||!slots.length) return 'Nessun orario oggi';
+  if(slots.length===1) return `⏱ oggi ${slots[0].on} → ${slots[0].off}`;
+  return `⏱ oggi ${slots.length} orari`;
+}
+function renderClient(){
+  const grid=document.getElementById('clGrid');
+  grid.innerHTML=outputs.map((o,i)=>`
+    <div class="cl-tile ${o.state?'is-on':''}" onclick="clientToggle(${i})">
+      <div class="cl-icon">${ICONS[i]}</div>
+      <div class="cl-name">${o.name}</div>
+      <div class="cl-state">${o.state?'ACCESO':'SPENTO'}</div>
+      <div class="cl-sched">${todaySlotsSummary(o)}</div>
+    </div>`).join('');
+  const now=new Date();
+  document.getElementById('clTime').textContent=
+    now.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})+' — '+
+    now.toLocaleDateString('it-IT',{weekday:'long',day:'numeric',month:'long'});
+}
+async function clientToggle(i){
+  outputs[i].state=!outputs[i].state;
+  renderClient(); renderOutList();
+  const n=['out1','out2','out3','out4','out5','out6'];
+  if(connected) await cloudPut(n[i],outputs[i].state);
+  else showToast('Offline — solo locale','warn');
+}
+
+// ─── UTILS ───────────────────────────────────────────────────────────────────
+function showPage(p,btn){
+  document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.ntab').forEach(x=>x.classList.remove('active'));
+  document.getElementById('page-'+p).classList.add('active');
+  if(btn) btn.classList.add('active');
+  if(p==='client') renderClient();
+}
+function showToast(msg,type=''){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.className='toast show'+(type?' '+type:'');
+  setTimeout(()=>t.className='toast',2800);
+}
+
+setInterval(renderClient,60000);
+purgePastDates();
+initOutputs(); loadConfig();
+// Seleziona oggi come data di default
+selectedDate=todayKey();
+renderOutList(); renderEditor(); renderClient();
+</script>
+</body>
+</html>
